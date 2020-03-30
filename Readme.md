@@ -17,5 +17,6 @@ You can ask or add features. Feel free to report errors here in the issue [https
 
 ## TODO
 
+* add argument parser
 * Security
 * Some improvements
