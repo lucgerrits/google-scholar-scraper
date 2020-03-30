@@ -7,7 +7,7 @@ This was designed for personal purpose.
 Using :
 
 * python 3
-* selenium (firefox)
+* selenium (firefox) [installation link](https://selenium-python.readthedocs.io/installation.html)
 
 ## Contribution
 
