@@ -11,7 +11,7 @@ Using :
 
 ## Contribution
 
-You can ask or add features. Feel free to report errors here in the issue (https://github.com/lucgerrits/google-scholar-scraper/issues)[https://github.com/lucgerrits/google-scholar-scraper/issues].
+You can ask or add features. Feel free to report errors here in the issue [https://github.com/lucgerrits/google-scholar-scraper/issues](https://github.com/lucgerrits/google-scholar-scraper/issues).
 
 ## TODO
 
