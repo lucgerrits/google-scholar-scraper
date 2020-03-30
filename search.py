@@ -18,6 +18,8 @@ import datetime
 import requests
 import mimetypes
 import time
+import os
+import sys
 print(__doc__)
 
 ############################
@@ -30,6 +32,11 @@ showbrowser = False #True
 verbose = False
 pdf_folder = "./files/"
 geckodriver_path = "./geckodriver"
+############################
+
+if not os.path.isfile(geckodriver_path):
+    print("Cannot find selenium driver: {}".format(geckodriver_path))
+    sys.exit(1)
 start = time.time()
 nb_page = int(limit//10)
 # selenium driver and options
@@ -104,19 +111,20 @@ def handleData(element):
                      validate_field(element["authors"]),
                      validate_field(element["url"])
                      ])
-
-    response = requests.get(element["url"])
-    content_type = response.headers['content-type']
-    extension = mimetypes.guess_extension(content_type)
-    if extension == ".pdf":
-        if element["title"] != "":
-            tmp_filename = pdf_folder + urllib.request.pathname2url(element["title"].replace(" ", "_")).replace("/", "_") + ".pdf"
-        else:
-            tmp_filename = pdf_folder + now + ".pdf"
-        tmp = open(tmp_filename, 'wb')
-        tmp.write(response.content)
-        tmp.close()
-
+    try:
+        response = requests.get(element["url"])
+        content_type = response.headers['content-type']
+        extension = mimetypes.guess_extension(content_type)
+        if extension == ".pdf":
+            if element["title"] != "":
+                tmp_filename = pdf_folder + urllib.request.pathname2url(element["title"].replace(" ", "_")).replace("/", "_") + ".pdf"
+            else:
+                tmp_filename = pdf_folder + now + ".pdf"
+            tmp = open(tmp_filename, 'wb')
+            tmp.write(response.content)
+            tmp.close()
+    except KeyError:
+        return
 
 def handleLink(element):
     if isLinkInHistory(element["url"]):
