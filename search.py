@@ -110,7 +110,7 @@ def handleData(element):
     extension = mimetypes.guess_extension(content_type)
     if extension == ".pdf":
         if element["title"] != "":
-            tmp_filename = pdf_folder + element["title"] + ".pdf"
+            tmp_filename = pdf_folder + urllib.request.pathname2url(element["title"]).replace("/", "_") + ".pdf"
         else:
             tmp_filename = pdf_folder + now + ".pdf"
         tmp = open(tmp_filename, 'wb')
