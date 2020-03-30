@@ -9,6 +9,9 @@ Using :
 * python 3
 * selenium (firefox)
 
+## Contribution
+
+You can ask or add features. Feel free to report errors here in the issue (https://github.com/lucgerrits/google-scholar-scraper/issues)[https://github.com/lucgerrits/google-scholar-scraper/issues].
 
 ## TODO
 
