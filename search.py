@@ -5,6 +5,7 @@ Scraping documentation on Google Scholar.
 
 @author: Luc Gerrits
 """
+from langid.langid import langid
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import InvalidArgumentException
 from selenium.common.exceptions import NoSuchElementException
@@ -20,6 +21,7 @@ import mimetypes
 import time
 import os
 import sys
+import zipfile
 print(__doc__)
 
 
@@ -28,11 +30,12 @@ print(__doc__)
 ############################
 query = ""  # 'EOSIO "EOS.IO"'  # filetype:pdf
 limit = 10
-file_name = 'results.csv'
+files_folder = "./files/"
+csv_file_name = files_folder + 'results.csv'
 showbrowser = False  # True
 verbose = False
-pdf_folder = "./files/"
 geckodriver_path = "./geckodriver"
+languages = ["en", "fr"]
 ############################
 
 if len(sys.argv) < 2:
@@ -55,10 +58,8 @@ nb_page = int(limit//10) if int(limit//10) > 0 else 1
 options = Options()
 if not showbrowser:
     options.add_argument("--headless")
-driver = webdriver.Firefox(executable_path=geckodriver_path, options=options)
-driver.set_page_load_timeout(15)
 
-csv_file = open(file_name, 'w', encoding='utf-8')
+csv_file = open(csv_file_name, 'w', encoding='utf-8')
 writer = csv.writer(csv_file)
 writer.writerow(['Title', "Date", "Timestamp", 'Authors', 'URL'])
 
@@ -67,8 +68,10 @@ filters = []  # domains to skip
 
 verboseprint = print if verbose else lambda *a, **k: None
 
+
 def now():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 
 def isLinkInHistory(url):
     for element in filters:
@@ -88,16 +91,16 @@ def randTime():
     return random.randint(1, 2) + round(random.random(), 2)
 
 
-def findElementXpath(xpath):
+def findElementsXpath(root_element, xpath):
     try:
-        element = driver.find_element_by_xpath(xpath)
+        element = root_element.find_elements_by_xpath(xpath)
         return element
     except NoSuchElementException:
         print("NoSuchElementException: (xpath) {}".format(xpath))
         return ""
 
 
-def getPage(url):
+def getPage(driver, url):
     try:
         driver.get(url)
         return True
@@ -109,15 +112,32 @@ def getPage(url):
         return False
 
 
+def make_request(url):
+    try:
+        response = requests.get(url)
+        return response
+    except requests.exceptions.RequestException as err:
+        print("\nCan't get PDF", err)
+
+    return -1
+
+
 def validate_field(field):
     if not field:
         field = 'N/A'
     return field
 
 
+def string_to_filename(title):
+    return title.replace("/", "_").replace(" ", "_")
+
+
 def handleData(element, try_download_pdf):
-    print("{} | ".format(now()), end="")
-    print(element["title"], end="")
+    print("{} | Found: {}".format(now(), element["title"]))
+    lang_detected = langid.classify(element["title"])
+    if lang_detected[0] not in languages:
+        print("{} | '{}' is not in required languages ({})".format(now(), lang_detected[0], ', '.join(languages)))
+        return
     writer.writerow([validate_field(element["title"]),
                      validate_field(element["date"]),
                      now(),
@@ -126,24 +146,24 @@ def handleData(element, try_download_pdf):
                      ])
     if try_download_pdf:
         try:
-            response = requests.get(element["url"])
+            response = make_request(element["url"])
+            if response == -1:
+                return
             content_type = response.headers['content-type']
             extension = mimetypes.guess_extension(content_type)
             if extension == ".pdf":
                 if element["title"] != "":
-                    tmp_filename = pdf_folder + \
-                        element["title"].replace(
-                            " ", "_").replace("/", "_") + ".pdf"
+                    tmp_filename = "{}{}-{}.pdf".format(
+                        files_folder, string_to_filename(now()), string_to_filename(element["title"]))
                 else:
-                    tmp_filename = pdf_folder + now() + ".pdf"
+                    tmp_filename = "{}{}-{}.pdf".format(
+                        files_folder, string_to_filename(now()), "no_title")
                 tmp = open(tmp_filename, 'wb')
                 tmp.write(response.content)
                 tmp.close()
-                print(" | PDF")
+                print("{} | Downloaded PDF".format(now()))
         except KeyError:
             return
-    else:
-        print("")
 
 
 def handleLink(element, try_download_pdf):
@@ -153,23 +173,22 @@ def handleLink(element, try_download_pdf):
         handleData(element, try_download_pdf)
 
 
-def searchGoogleScholar(page):
+def searchGoogleScholar(driver, page):
     if page == 0:
         q = {'q': query}
     else:
         q = {'q': query, 'start': int(page*10)}
     url = 'https://scholar.google.com/scholar?hl=en&scisbd=2&as_sdt=1%2C5&as_vis=1&{}'.format(
         urllib.parse.urlencode(q))
-    if not getPage(url):
+    if not getPage(driver, url):
         return
 
-    main_results = driver.find_elements_by_xpath(
-        "//*[@class='gs_r gs_or gs_scl']")
+    main_results = findElementsXpath(driver, "//*[@class='gs_r gs_or gs_scl']")
     i = 0
     for elem in main_results:
-        a_tag = elem.find_elements_by_xpath(".//a[@href and @data-clk]")
-        date = elem.find_elements_by_xpath(".//*[@class='gs_age']")
-        authors = elem.find_elements_by_xpath(".//*[@class='gs_a']")
+        a_tag = findElementsXpath(elem, ".//a[@href and @data-clk]")
+        date = findElementsXpath(elem, ".//*[@class='gs_age']")
+        authors = findElementsXpath(elem, ".//*[@class='gs_a']")
         try_download_pdf = False
         try:
             if "span" in a_tag[0].get_attribute('innerHTML'):
@@ -203,26 +222,67 @@ def searchGoogleScholar(page):
     return i
 
 
-def main():
+def _search():
+    driver = webdriver.Firefox(
+        executable_path=geckodriver_path, options=options)
+    driver.set_page_load_timeout(15)
     print("{} | Limit is set to {} results.".format(now(), nb_page*10))
     # init
     print("{} | Init google".format(now()))
-    getPage('https://www.google.com/')
+    getPage(driver, 'https://www.google.com/')
     time.sleep(randTime())
     # start
     nb_elements = 0
     for curr_page in range(0, nb_page):
         print("{} | Crawling page {}".format(now(), curr_page))
-        nb_elements += searchGoogleScholar(curr_page)
+        nb_elements += searchGoogleScholar(driver, curr_page)
         time.sleep(randTime())
     # end
     print("{} | Found {} elements".format(now(), nb_elements))
     end = time.time()
     elapsed = end - start
-    print("{} | Elapsed time: {}".format(now(), time.strftime("%H:%M:%S", time.gmtime(elapsed))))
+    print("{} | Elapsed time: {}".format(
+        now(), time.strftime("%H:%M:%S", time.gmtime(elapsed))))
+    driver.close()
+
+
+def zipdir(path, ziph):
+    # Source: https://stackoverflow.com/a/1855118
+    # ziph is zipfile handle
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            if file.endswith(".pdf") or file.endswith(".csv"):
+                ziph.write(os.path.join(root, file))
+
+
+def _compress():
+    zip_filename = string_to_filename('{}_q={}.zip'.format(
+        now(), query))
+    zipf = zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED)
+    zipdir(files_folder, zipf)
+    zipf.close()
+    print("{} | Saved in: {}".format(now(), zip_filename))
+
+
+def _clear_files():
+    dir_name = files_folder
+    test = os.listdir(dir_name)
+    for item in test:
+        if item.endswith(".pdf") or item.endswith(".csv"):
+            os.remove(os.path.join(dir_name, item))
+
+
+def main():
+    _clear_files()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "reset":
+            print("{} | Just remove all temporay files.".format(now()))
+            return
+
+    _search()
+    _compress()
+    _clear_files()
 
 
 main()
 csv_file.close()
-print("{} | Saved in: {}".format(now(), file_name))
-driver.close()

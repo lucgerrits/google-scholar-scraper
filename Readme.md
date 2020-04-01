@@ -8,6 +8,12 @@ Using :
 
 * python 3
 * selenium (firefox) [installation link](https://selenium-python.readthedocs.io/installation.html)
+* langid python library
+
+Pull this git repo and then:
+```
+git submodule update --init --recursive
+```
 
 **Note:** be sure to use the version 74 of firefox or change the geckodriver by visiting the selenium website.
 
