@@ -59,9 +59,6 @@ options = Options()
 if not showbrowser:
     options.add_argument("--headless")
 
-csv_file = open(csv_file_name, 'w', encoding='utf-8')
-writer = csv.writer(csv_file)
-writer.writerow(['Title', "Date", "Timestamp", 'Authors', 'URL'])
 
 linkHistory = []
 filters = []  # domains to skip
@@ -132,7 +129,7 @@ def string_to_filename(title):
     return title.replace("/", "_").replace(" ", "_")
 
 
-def handleData(element, try_download_pdf):
+def handleData(element, writer, try_download_pdf):
     print("{} | Found: {}".format(now(), element["title"]))
     lang_detected = langid.classify(element["title"])
     if lang_detected[0] not in languages:
@@ -166,14 +163,14 @@ def handleData(element, try_download_pdf):
             return
 
 
-def handleLink(element, try_download_pdf):
+def handleLink(element, writer, try_download_pdf):
     if isLinkInHistory(element["url"]):
         return
     else:
-        handleData(element, try_download_pdf)
+        handleData(element, writer, try_download_pdf)
 
 
-def searchGoogleScholar(driver, page):
+def searchGoogleScholar(driver, writer, page):
     if page == 0:
         q = {'q': query}
     else:
@@ -217,12 +214,15 @@ def searchGoogleScholar(driver, page):
             "authors": authors,
             "date": date
         }
-        handleLink(data, try_download_pdf)
+        handleLink(data, writer, try_download_pdf)
         i += 1
     return i
 
 
 def _search():
+    csv_file = open(csv_file_name, 'w', encoding='utf-8')
+    writer = csv.writer(csv_file, quoting=csv.QUOTE_ALL)
+    writer.writerow(['Title', "Date", "Timestamp", 'Authors', 'URL'])
     driver = webdriver.Firefox(
         executable_path=geckodriver_path, options=options)
     driver.set_page_load_timeout(15)
@@ -235,7 +235,7 @@ def _search():
     nb_elements = 0
     for curr_page in range(0, nb_page):
         print("{} | Crawling page {}".format(now(), curr_page))
-        nb_elements += searchGoogleScholar(driver, curr_page)
+        nb_elements += searchGoogleScholar(driver, writer, curr_page)
         time.sleep(randTime())
     # end
     print("{} | Found {} elements".format(now(), nb_elements))
@@ -244,6 +244,7 @@ def _search():
     print("{} | Elapsed time: {}".format(
         now(), time.strftime("%H:%M:%S", time.gmtime(elapsed))))
     driver.close()
+    csv_file.close()
 
 
 def zipdir(path, ziph):
@@ -278,11 +279,9 @@ def main():
         if sys.argv[1] == "reset":
             print("{} | Just remove all temporay files.".format(now()))
             return
-
     _search()
     _compress()
     _clear_files()
 
 
 main()
-csv_file.close()
