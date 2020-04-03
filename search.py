@@ -22,6 +22,7 @@ import time
 import os
 import sys
 import zipfile
+import socket
 print(__doc__)
 
 
@@ -67,6 +68,22 @@ verboseprint = print if verbose else lambda *a, **k: None
 
 def now():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def is_connected():
+    #https://stackoverflow.com/a/20913928/13187605
+    try:
+        # see if we can resolve the host name -- tells us if there is
+        # a DNS listening
+        host = socket.gethostbyname("1.1.1.1")
+        # connect to the host -- tells us if the host is actually
+        # reachable
+        s = socket.create_connection((host, 80), 2)
+        s.close()
+        return True
+    except:
+        pass
+    return False
 
 
 def isLinkInHistory(url):
@@ -180,7 +197,8 @@ def searchGoogleScholar(driver, writer, page, nb_elements):
     url = 'https://scholar.google.com/scholar?hl=en&scisbd=2&as_sdt=1%2C5&as_vis=1&{}'.format(
         urllib.parse.urlencode(q))
     if not getPage(driver, url):
-        return
+        print("Failed to get google scholar web page.")
+        return 0
 
     main_results = findElementsXpath(driver, "//*[@class='gs_r gs_or gs_scl']")
     i = 0
@@ -232,7 +250,7 @@ def _search():
                      "Timestamp", 'Authors', 'URL'])
     driver = webdriver.Firefox(
         executable_path=geckodriver_path, options=options)
-    driver.set_page_load_timeout(15)
+    driver.set_page_load_timeout(60)
     print("{} | Limit is set to {} results.".format(now(), limit))
     # init
     print("{} | Init google".format(now()))
@@ -282,11 +300,14 @@ def _clear_files():
 
 
 def main():
+    if not is_connected():
+        print("Not internet connection.")
+        sys.exit(1)
     _clear_files()
     if len(sys.argv) > 1:
         if sys.argv[1] == "reset":
             print("{} | Just remove all temporay files.".format(now()))
-            return
+            sys.exit(0)
     _search()
     _compress()
     _clear_files()
